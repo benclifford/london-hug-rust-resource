@@ -1,0 +1,71 @@
+
+<pre>
+
+NOTES:
+
+0. about rust (1 min)
+
+1. Rust details (11 mins)
+
+    - motivation: basic motivation: freeing memory.
+         C - explicit frees. reasoning in programmers head.
+
+           - code sample. code sample with double free, or free then re-use. or we might forget to free it at all. memory leak in the sense of "the allocator knows it is allocated, but nobody else does"
+
+         many more recent languages (Java/Python/Haskell/Python...) - garbage collection. expensive. "naive" - as a programmer I know that some data won't be freed "now", but GC still has to make a *runtime* check of all that. Lots of GC tech over the years. It's "impossible" to have a pointer to memory that isn't allocated (and we usually call these references now, not pointers)
+
+           - code sample: allocate. long process, but keep variable assigned. so doesn't get freed. every gc in long process needs to consider this allocation. memory leak in the sense of "we don't need it, but the GC won't release it because we have a variable pointing at it".
+
+       - what if we could have the efficiency of static checking, with
+         the safety of GC?
+       - rust attempts to give some of this, though of course as you whack the mole down in one place, it pops up somewhere else, as we'll see...
+
+  ownership
+
+  lack of explicit frees - the frees go where the owner drops
+   the value
+
+  borrowing so you don't have to pass things back
+    - fighting the borrow checker. aka fighting the type checker.
+
+  type signatures - and how they are reminiscent of crazy haskell
+    type signatures  (eg lens, eff, servant)
+
+  analogies to compile-time/static garbage collection
+
+  various wrappers for ownership fun (reference counting - with
+    standard rc problems)
+
+  passing between threads?
+
+2. what does haskell offer? (7 mins)
+ 2.1 state monads: (2 min)
+    state actions are compoletely serialised even when operating on
+    "different" pieces of state (you can name them differently as STRef
+    but actions are still explicitly serialised)
+ 2.2 linear types - tweag proposal (5 min)
+    very brief overview
+    - similar direction but different: can do more, and less.
+      eg rust has sugar - for borrowing (pass a value in and
+      get it back, and it is in a particular state inside the
+      borrowed call), and for implicitly releasing a value.
+====
+aspiwack [17:42]
+Full instructions here: https://github.com/tweag/ghc/tree/linear-types#readme
+
+benc [17:42]
+just so i can say in the talk "i have compiled something fairly simple with it" rather than "i have heard about this thing"
+aspiwack [17:42]
+A library with a fully configured stack.yaml: https://github.com/tweag/linear-base/
+====
+
+3. overview slide (1 min)
+
+
+really care about counting references at compile time:
+ given a reference R, do we: drop it, duplicate it, neither (in which case, I think, it is linear?)
+
+
+rust notion of lifetimes - these can be awkward to reason about. compile time type vairables...
+
+</pre>
