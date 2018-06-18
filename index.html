@@ -1,5 +1,86 @@
 
+
 <pre>
+
+I'm going to talk about Rust, and specifically the way that Rust does
+memory management.
+
+Briefly, Rust is a "safe, concurrent, practical language". What I think
+is interesting is that they care about safety, but have a strong
+emphasis on performance. The most notable use is that 
+parts of the Firefox web browser are written in Rust.
+
+So first I'll briefly review some memory management techniques:
+
+We have C-like:
+
+slide - code example:
+
+r = malloc(10)
+mutate(r)
+free(r)
+
+We allocate some memory (for example, with malloc). We use it
+(I don't care how, for the purposes of this talk).
+We free it. Here I'm using r to mean a "reference" or a "pointer"
+without getting too far into the definition of what one of those
+actually is.
+
+In this example, that happens all in a row, but in
+reality it is likely the pointer to the memory gets passed around
+and stored in different places, on its eventual journey to being
+released. As a side note, C is pretty liberal about what you can
+use that memory for - you can allocate a number of bytes without
+really telling the compiler what you're going to use those bytes
+for.
+
+What might go wrong?
+
+We might free the memory before we have finished using it. Then what
+happens? Memory corruption or a segfault.
+
+We might forget to free the memory, and then we have a memory leak:
+that memory remains allocated "forever" (for some notion of forever)
+
+and as a side note, we might allocate 4 bytes but run it on code that
+expects 8 bytes... similar memory corruption problems.
+
+
+Another style to use garbage collection. I first really used this in
+Java, and it's pretty much the standard approach in high level
+languages - for example, it is how Haskell does things.
+
+Slide - example:
+
+r = new Foo()
+mutate(r)
+
+We can allocate some memory, we can use it, and then when we're done
+we just stop talking about it, and let the garbage collector eventually
+tidy things up. As a side note, these languages are often a bit stricter
+about the types of references being passed around, but that is somewhat
+(but not entirely) orthogonal to memory management.
+
+An advantage here: if 'r' is in scope, we know the memory will not have
+been released.
+
+A disadvantage is that garbage collectors run at runtime - this adds on
+a bunch of runtime overhead.
+
+So what does Rust do?
+
+it lets us write code like this:
+
+SLIDE: TODO: use rust syntax
+r = new Foo() 
+mutate(r)
+
+like the garbage collector case; but with memory release somehow managed
+statically - at compile time. There's no runtime garbage collector.
+
+This isn't magic though, and if we squish down complication in one
+place, it pops up in another. I'm going to talk about that complication
+in the rest of this talk.
 
 NOTES:
 
