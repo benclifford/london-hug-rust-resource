@@ -82,6 +82,72 @@ This isn't magic though, and if we squish down complication in one
 place, it pops up in another. I'm going to talk about that complication
 in the rest of this talk.
 
+
+Let's take a more theoretical look at things that you can do with 
+a pointer or a reference (or a handle...) and how that might go
+wrong: - actually, these are things you can do to any value in a
+language, but the problems happen when those values are references.
+
+We can forget a reference:
+
+SLIDE: todo in rust
+f(r) = 7
+
+We had a pointer to r. But we've abandoned it without releasing
+the memory.
+
+Often that's OK, because we can also duplicate references:
+
+SLIDE:
+f(r) = 7
+
+r = alloc()
+f(r)
+free(r)
+
+We passed r into f, but we also kept a copy ourselves and used it
+to free memory.
+
+A non-reference version of this might be
+
+SLIDE: (on end of previous slide?)
+sqr(x) = x * x
+
+where we duplicate the number stored in x - that's usually fine to do
+in this case.
+
+What if we regard those operations (forgetting, and duplication)
+as inherently dangerous, and try to get rid of them?
+
+The only way we can get rid of a pointer is by passing it into free()
+
+SLIDE:
+r = alloc()
+free(r)
+
+What about if we want to use that memory in a function?
+
+Slide:
+r = alloc()
+mutate(r)
+free(r)
+
+This doesn't work for two reasons:
+
+firstly, mutate() isn't allowed to forget r; and secondly, we can't
+pass r to mutate *and* keep a copy for later use.
+
+So mutate() could free r itself, but that's a bit limiting. Another
+thing it could do is pass it back:
+
+r = alloc()
+r' = mutate(r)
+free(r')
+
+
+
+
+
 NOTES:
 
 0. about rust (1 min)
