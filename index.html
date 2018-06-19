@@ -37,7 +37,7 @@ for.
 What might go wrong?
 
 We might free the memory before we have finished using it. Then what
-happens? Memory corruption or a segfault.
+happens? Memory corruption or a segfault. [use-after-free]
 
 We might forget to free the memory, and then we have a memory leak:
 that memory remains allocated "forever" (for some notion of forever)
@@ -66,6 +66,19 @@ been released.
 
 A disadvantage is that garbage collectors run at runtime - this adds on
 a bunch of runtime overhead.
+
+TODO: a third way:
+
+{
+  int x;
+  mutate(&x)
+}
+// implicit free of x at end of scope
+don't need to write a free, and x will always be released, but we
+need to be careful to not pass a reference to x outside of the
+scope (for example, if mutate stores it in a global struct for
+later use)
+
 
 So what does Rust do?
 
@@ -144,9 +157,38 @@ r = alloc()
 r' = mutate(r)
 free(r')
 
+mutate(r) = 
+   ...
+   return r
 
 
+We end up with explicit threading of the reference through the code.
 
+Then, we can use syntax to hide that, and
+get back this: (todo: rust & syntax for passing references - borrowing)
+
+r = alloc()
+mutate(r)
+free(r)
+
+which looks the same syntactically as our earlier example but now has
+linear semantics. We can say that mutate has "borrowed" the value
+and given it back afterwards.
+
+Another bit of syntax we can do: instead of needing to expliclty
+free r, we can insert a free call implicitly, when r goes out of
+scope.
+
+r = alloc()
+mutate(r)
+
+Syntactically this looks like the garbage collected case -
+but it isn't: we have those linear semantics that means we know r is still
+allocated at the end of this code block and that it's going to
+go out of scope at the end of this code block and that it has not
+been duplicated anywhere; so we can and must release it at the
+end of the block. releasing it like a stack automatic, even though
+there might be a lot more than just a couple of bytes on the stack.
 
 NOTES:
 
