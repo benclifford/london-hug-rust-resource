@@ -2,13 +2,36 @@
 
 <pre>
 
+Ownership in the Type System
+
+Abstract:
+
+Rust can provide memory safety by statically tracking who owns
+each piece of allocated memory.  This needs more elaborate type
+signatures, and plenty of wrestling to make it all compile -
+something any Haskeller will be familiar with.  I'll talk a bit
+about the theory, a bit about the concrete language features
+that make this more usable, and a bit about some vaguely related
+Haskell.  
+
+====
+
+
 I'm going to talk about Rust, and specifically the way that Rust does
-memory management.
+resource management - mostly memory management.
 
 Briefly, Rust is a "safe, concurrent, practical language". What I think
 is interesting is that they care about safety, but have a strong
 emphasis on performance. The most notable use is that 
 parts of the Firefox web browser are written in Rust.
+
+it's got things closures, traits - which are like typeclasses,
+parameterised types, concurrency, pattern matching, 
+single-assignment variables,
+lots of things that you'd expect in a
+"modern" programming language. I'm not really going to talk about
+any of those things, though, except as needed.
+[SLIDE: rust buzzwords]
 
 So first I'll briefly review some memory management techniques:
 
@@ -33,6 +56,9 @@ released. As a side note, C is pretty liberal about what you can
 use that memory for - you can allocate a number of bytes without
 really telling the compiler what you're going to use those bytes
 for.
+
+The correctness proof happens "in our head (or test suites etc)",
+not in the compiler.
 
 What might go wrong?
 
@@ -79,6 +105,15 @@ need to be careful to not pass a reference to x outside of the
 scope (for example, if mutate stores it in a global struct for
 later use)
 
+naughty use:
+
+f() 
+{ int x;
+  return &a;
+}
+
+don't have this static-scope risk in GC languages.
+
 
 So what does Rust do?
 
@@ -87,9 +122,11 @@ it lets us write code like this:
 SLIDE: TODO: use rust syntax
 r = new Foo() 
 mutate(r)
+// drop(r)
 
 like the garbage collector case; but with memory release somehow managed
 statically - at compile time. There's no runtime garbage collector.
+it'll implicitly put in a drop call, which is like a free.
 
 This isn't magic though, and if we squish down complication in one
 place, it pops up in another. I'm going to talk about that complication
@@ -104,12 +141,18 @@ language, but the problems happen when those values are references.
 We can forget a reference:
 
 SLIDE: todo in rust
-f(r) = 7
+or TODO in haskell
+f r = 7
+
+f (r,s) = r -- forget s
+f (r,_) = r
 
 We had a pointer to r. But we've abandoned it without releasing
-the memory.
+the memory. In a garbage collected system, that means the
+garbage collector can come along later to release it.
 
-Often that's OK, because we can also duplicate references:
+In a non-garbage collected system, often that's OK too,
+because we can also duplicate references:
 
 SLIDE:
 f(r) = 7
@@ -226,18 +269,66 @@ NOTES:
     standard rc problems)
 
   passing between threads?
+   - somewhat overblown chapter title "Fearless Concurrency" - specifically relevance to memory safety
+   - closures - passing ownership into a closure. 'move' keyword (not just for thread stuff... but useful when launching a thread). 'Copy' trait - for things that look like "values" - got rid of duplication but this is how we allow it. talking about "ownership" that is not just hierarchical scopes. channels - sending down a channel changes ownership - no longer in local scope, so we don't (and can't) use a thing or free it. message passing - but without copying.
+
+(concurrent) rust exmaples that are neat:
+
+  example of interesting ownership transfer:
+  1. todo: a simple transfer of ownership (into a function? or a struct?)
+
+  2. channel concurrency - sending memory to someone else is, like a free,
+    a way of safely getting rid of our responsibility for a resource,
+    and also means we can't access it any more.
+
+  mutux-on-memory (in shared memory concurrency section) - uses a smart pointer
+   the is aquired by unlocking, and when you drop the smart pointer,
+   it re-locks the mutex. mention that you would use unsafe to do this,
+   which, like in haskell, declares that you believe it to be safe
+   but the compiler can't check so. 'Drop' trait. Combines a value
+   which proves that we have access to the locked meory with the
+   actual reference to the memory, into a single smart pointer.
+   We can only ever have one of these smart pointers in existence at
+   once (if mutex is correctly implemented)
+
+ - introduce "smart pointers" before that? as a pointer that can 
+    know how its going to be used - mutex as a particular instance
+    of that - or perhaps just mutex as *the* example to introduce
+    this?
+   - because we're more restricted on what we can do with pointers
+     /references, we can have (need?) more rust libraries that express
+      reference/pointer patterns in rust code,
+     that previously existed in our head or in the garbage collector.
+    - reference counting smart pointers, mutex above.
+      - eg 1. reference counting smart pointer: the pointer owns
+         the memory, and keeps track of how many people have a copy,
+         (because it has code both to create and drop references),
+         and can release memory on 0 references.
+      - more interestingly, mutex, for concurrency.
+
 
 2. what does haskell offer? (7 mins)
+- and can point out arnaud in the pub afterwards
  2.1 state monads: (2 min)
     state actions are compoletely serialised even when operating on
     "different" pieces of state (you can name them differently as STRef
-    but actions are still explicitly serialised)
+    but actions are still explicitly serialised). pretty lame.
+  - something to do with if we want a thing to do linear operations
+     on, we can't let it be a pure "value" any more - for example,
+     mutable in place array operations? (I think there's an array
+     for that - MArray) - linearisation of all array operations by
+     monad sequence. - code examples of MArray? - there's an example
+     in s2.2 of the linear types paper, even.
  2.2 linear types - tweag proposal (5 min)
     very brief overview
     - similar direction but different: can do more, and less.
       eg rust has sugar - for borrowing (pass a value in and
       get it back, and it is in a particular state inside the
       borrowed call), and for implicitly releasing a value.
+    - maybe overview of interesting haskell-specific issues based
+        on section titles in paper - eg "consuming" a value in a lazy
+          language; using higher order functions; ... and some of the case studies. perhaps just put those on a slide and mention them in hardly any depth?
+
 ====
 aspiwack [17:42]
 Full instructions here: https://github.com/tweag/ghc/tree/linear-types#readme
@@ -255,6 +346,6 @@ really care about counting references at compile time:
  given a reference R, do we: drop it, duplicate it, neither (in which case, I think, it is linear?)
 
 
-rust notion of lifetimes - these can be awkward to reason about. compile time type vairables...
+rust notion of lifetimes and ownership - these can be awkward to reason about. compile time type variables...
 
 </pre>
