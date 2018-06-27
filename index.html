@@ -77,10 +77,6 @@ do
   hClose r 
 
 </code></pre>
-<pre><code class="haskell" data-trim data-noescape>
-withFile $ \h -> hPutStrLn h "hello world"
-</code></pre>
-
 <aside class="notes">
 2. resource management techniques - a review
 
@@ -102,10 +98,6 @@ is the file handle.
 
 In these two examples, that happens all in a row in the source code,
 so it's quite easy to reason about.
-
-The third example has a helper
-function withFile which also helps with reasoning: the handle is valid
-only inside the supplied action block.
 
 In reality it is likely a reference gets passed around
 stored and used in several different places,
@@ -217,36 +209,69 @@ By "hope" I mean manually prove outside of the type system.
 </section>
 
 <section>
-<pre>
---
+<pre><code class="haskell" data-trim data-noescape>
+withFile "myfile.txt" WriteMode $
+  \r -> hPutStrLn r "hello world"
+</code></pre>
 
-TODO: a third way:
-local variables
-
-[SLIDE]
-f()
+<pre><code class="C" data-trim data-noescape>
+void f()
 {
   int x;
   mutate(&x)
-} // implicit free of x at end of scope
+}
+</code></pre>
+<aside class="notes">
+A third way is scope based, local variables: built into C, and
+provided by bracketing style of helper function for files in 
+Haskell.
 
+The resource is released when the scope ends: in the C example,
+the space usually happens to be on the stack and disappears when
+we return from the function; in the Haskell example, we have this
+helper which opens a file, passes the handle, and then closes
+the file at the end - so the handle is valid within this
+scope defined by the lambda expression.
+</aside>
+</section>
+
+<section>
+<pre><code class="haskell" data-trim data-noescape>
+do 
+  r' <- withFile "myfile.txt" WriteMode $
+          \r -> return r
+</code></pre>
+
+<pre><code class="C" data-trim data-noescape>
+int * f()
+{
+  int x;
+  return &x;
+}
+</code></pre>
+
+
+
+<aside class="notes">
 We don't write a free call, and x will always be released, but we
 need to be careful to not pass a reference to x outside of the
 scope (for example, if mutate stores it in a global struct for
-later use) - else same "use-after-free" bug
+later use) - otherwise we get "use-after-free" bugs like in the
+earlier examples.
+</aside>
+</section>
 
-[SLIDE]
-f() 
-{ int x;
-  return &a;
-}
+<section>
 
-We don't have this static-scope risk in GC languages.
+<aside class="notes">
 
-In languages like C and Java, this are heavily restricted to a
-certain set of data types - for example, to simple data types
-like integers (or only references to more complex structures).
-We can't use this technique to allocate a linked list, for example.
+</aside>
+
+</section>
+
+
+<section>
+<pre>
 
 ====
 
