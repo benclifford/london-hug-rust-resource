@@ -325,24 +325,32 @@ is a big part of Rust's resource management story.
 
 </section>
 
-
 <section>
-<pre>
-Every value in rust is owned by exactly one variable. When that
-variable goes out of scope, that value is freed.
-
-To begin with, that looks like the scope based model I talked about
-previously.
-
-[slide]
+<pre><code class="rust" data-trim data-noescape>
 fn main()
 {
   let r = vec![1, 2, 3];
   process(&r);
 }
 
+</code></pre>
+
+
+<aside class="notes">
+Every value in rust is owned by exactly one variable. When that
+variable goes out of scope, that value is freed.
+
+To begin with, that looks like the scope based model I talked about
+previously.
+
 Rust puts in a static implicit free when r goes out of scope.
 To be clear - it isn't garbage collected.
+</aside>
+</section>
+
+<section>
+<pre>
+
 
 It's basically doing this, which is more explicit and also valid rust.
 
