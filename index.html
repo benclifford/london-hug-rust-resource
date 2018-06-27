@@ -75,7 +75,6 @@ do
   r <- hOpenFile "foo" WriteMode
   hPutStrLn r "hello world"
   hClose r 
-
 </code></pre>
 <aside class="notes">
 2. resource management techniques - a review
@@ -262,13 +261,63 @@ earlier examples.
 </section>
 
 <section>
+<pre><code class="C" data-trim data-noescape>
+int f(int *r)
+{
+  return 7;
+}
+</code></pre>
+
+<pre><code class="haskell" data-trim data-noescape>
+f :: (Handle, Handle) -> IO ()
+f (_,b) = hClose b
+</code></pre>
+
 
 <aside class="notes">
+3. So let's dig down to some of the basic things you can do with
+references/handles/pointers, and how those things can cause trouble
+with reasoning. These are things you can do to any value in most
+languages, but the problems specifically arise when those values
+are references, that is names to some other resource (a pointer to
+member, a file handle).
 
+First, we're allowed to forget references. We might just stop
+talking about a variable; or we might only pattern match 
+part of a tuple.
 </aside>
 
 </section>
 
+<section>
+
+<pre><code class="C" data-trim data-noescape>
+void f() {
+  r = malloc(10);
+  mutate(r);
+  free(r);
+}
+</code></pre>
+
+<pre><code class="haskell" data-trim data-noescape>
+do
+  r <- hOpenFile "foo" WriteMode
+  hPutStrLn r "hello world"
+  hClose r 
+</code></pre>
+<aside class="notes">
+That's usually combined with being able to duplicate references. We've
+passed a reference into <code>mutate</code> or <code>putStrLn</code>
+and those have done some stuff and then forgetten the reference,
+but that's fine, because we've also kept a copy for ourselves to
+pass in later.
+
+Those two everyday operations - forgetting and duplicating - are part
+of what makes it quite hard to reason about whats going on, and
+controlling those is part of rust's resource management story.
+</aside>
+
+</section>
 
 <section>
 <pre>
@@ -301,15 +350,6 @@ Rust puts in release calls (called Drop) at the right place.
 This isn't magic though, and if we squish down complication in one
 place, it pops up in another. I'm going to talk about that complication
 in the rest of this talk.
-
-
-3.2
-
-Let's take a slightly more theoretical look at things that you can do with 
-a pointer or a reference (or a handle...) and how that might go
-wrong: - actually, these are things you can do to any value in a
-language, but the problems happen when those values are reference to
-some other reasource.
 
 
 3.2.1 Forgetting
