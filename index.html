@@ -1,4 +1,22 @@
+<html>
+        <head>
+                <link rel="stylesheet" href="reveal.js/css/reveal.css">
+                <link rel="stylesheet" href="reveal.js/css/theme/black.css">
+                <link rel="stylesheet" href="reveal.js/lib/css/zenburn.css">
+<title>Ownership in the type system / London Haskell / June 2018</title>
+        </head>
+        <body>
+  <div class="reveal">
+    <div class="slides">
+      <section><h1>Ownership in the type system</h1>
+<p>Ben Clifford</p>
+<p>London Haskell, June 2018</p>
+<p><a href="mailto:benc@hawaga.org.uk">benc@hawaga.org.uk</a></p>
+<p>Press 's' for speaker notes</p>
+      </section>
 
+
+<section>
 
 <pre>
 
@@ -16,46 +34,71 @@ Haskell.
 
 ====
 
+1. INTRO
 
-I'm going to talk about Rust, and specifically the way that Rust does
-resource management - mostly memory management.
+I'm going to talk about resource management in a language called
+Rust, which I expect a lot of people have heard about, even if
+they haven't seen it.
+
+I'm going to mix up three languages in this
+talk: Haskell (because of course), C (because it has some good
+examples that are hard in Haskell), and of course Rust.
 
 Briefly, Rust is a "safe, concurrent, practical language". What I think
 is interesting is that they care about safety, but have a strong
-emphasis on performance. The most notable use is that 
+emphasis on performance and are trying to be a competitor in the
+same space as C.
+
+The most notable use is that 
 parts of the Firefox web browser are written in Rust.
 
-it's got things closures, traits - which are like typeclasses,
-parameterised types, concurrency, pattern matching, 
-single-assignment variables,
-lots of things that you'd expect in a
-"modern" programming language. I'm not really going to talk about
-any of those things, though, except as needed.
-[SLIDE: rust buzzwords]
+It's got plenty of modern language features - here's a list - but
+this isn't a Rust intro talk so I'm not really going to talk about them
+except when needed.
 
-So first I'll briefly review some memory management techniques:
+[SLIDE]
+ closures
+ traits - which are like typeclasses,
+ parameterised types,
+ concurrency,
+ pattern matching, 
+ single-assignment variables,
+(any other buzzwords?)
+[/SLIDE}
 
-We have C-like:
+====
 
-slide - code example:
+2. resource management techniques - a review
 
-r = malloc(10)
-mutate(r)
-free(r)
+First I'll briefly review some resource management techniques -
+by resource I'm using memory as my main example, but there are
+other examples.
+
+There's an explicit, C-like, style:
+
+[SLIDE]
+f() {
+  r = malloc(10)
+  mutate(r)
+  free(r)
+}
+[/SLIDE]
 
 We allocate some memory (for example, with malloc). We use it
 (I don't care how, for the purposes of this talk).
 We free it. Here I'm using r to mean a "reference" or a "pointer"
-without getting too far into the definition of what one of those
-actually is.
+without getting too technical about what one of those is.
 
-In this example, that happens all in a row, but in
+In this example, that happens all in a row in the source code, so it's
+quite easy to reason about; but in
 reality it is likely the pointer to the memory gets passed around
 and stored in different places, on its eventual journey to being
-released. As a side note, C is pretty liberal about what you can
+released.
+
+(As a side note, C is pretty liberal about what you can
 use that memory for - you can allocate a number of bytes without
 really telling the compiler what you're going to use those bytes
-for.
+for.)
 
 The correctness proof happens "in our head (or test suites etc)",
 not in the compiler.
@@ -65,57 +108,99 @@ What might go wrong?
 We might free the memory before we have finished using it. Then what
 happens? Memory corruption or a segfault. [use-after-free]
 
+[SLIDE}
+f() {
+  r = malloc(10)
+  free(r)
+  mutate(r)
+}
+[SLIDE]
+
 We might forget to free the memory, and then we have a memory leak:
 that memory remains allocated "forever" (for some notion of forever)
+
+f() {
+  r = malloc(10)
+  mutate(r)
+}
 
 and as a side note, we might allocate 4 bytes but run it on code that
 expects 8 bytes... similar memory corruption problems.
 
 
+--
+
 Another style to use garbage collection. I first really used this in
-Java, and it's pretty much the standard approach in high level
+Java, and it's pretty much the standard approach for memory
+management in high level
 languages - for example, it is how Haskell does things.
 
 Slide - example:
 
-r = new Foo()
-mutate(r)
+let r = Foo
+in process r
 
 We can allocate some memory, we can use it, and then when we're done
 we just stop talking about it, and let the garbage collector eventually
-tidy things up. As a side note, these languages are often a bit stricter
+tidy things up.
+
+(As a side note, these languages are often a bit stricter
 about the types of references being passed around, but that is somewhat
-(but not entirely) orthogonal to memory management.
+(but not entirely) orthogonal to memory management.)
 
 An advantage here: if 'r' is in scope, we know the memory will not have
 been released.
 
+We can't name a thing, unless that thing is valid: knowing the "name"
+of the thing keeps it valid.
+
 A disadvantage is that garbage collectors run at runtime - this adds on
 a bunch of runtime overhead.
 
-TODO: a third way:
+Also, sometimes we do want to be a bit more explicit about when 
+a resource is released - we want to know a file has been closed,
+perhaps - but with garbage collection, you have to "hope" that you
+really have got rid of all references. (by "hope" again I mean
+manually prove outside of the type system)
 
+[namecheck pusher / will's talk on very degenerate situation they
+encountered]
+
+--
+
+TODO: a third way:
+local variables
+
+[SLIDE]
+f()
 {
   int x;
   mutate(&x)
-}
-// implicit free of x at end of scope
-don't need to write a free, and x will always be released, but we
+} // implicit free of x at end of scope
+
+We don't write a free call, and x will always be released, but we
 need to be careful to not pass a reference to x outside of the
 scope (for example, if mutate stores it in a global struct for
-later use)
+later use) - else same "use-after-free" bug
 
-naughty use:
-
+[SLIDE]
 f() 
 { int x;
   return &a;
 }
 
-don't have this static-scope risk in GC languages.
+We don't have this static-scope risk in GC languages.
 
+In languages like C and Java, this are heavily restricted to a
+certain set of data types - for example, to simple data types
+like integers (or only references to more complex structures).
+We can't use this technique to allocate a linked list, for example.
 
-So what does Rust do?
+====
+
+3.  So what does Rust do?
+
+3.1 Well, none of those.
 
 it lets us write code like this:
 
@@ -124,21 +209,36 @@ r = new Foo()
 mutate(r)
 // drop(r)
 
-like the garbage collector case; but with memory release somehow managed
-statically - at compile time. There's no runtime garbage collector.
-it'll implicitly put in a drop call, which is like a free.
+like the garbage collector or local variable case;
+
+... r can be a complex structure
+
+... but with memory release somehow managed
+statically - at compile time (like the local variable case)
+
+... but we can pass a pointer to that memory around outside of 
+the local scope (like the garbage collected case).
+
+Rust puts in release calls (called Drop) at the right place.
 
 This isn't magic though, and if we squish down complication in one
 place, it pops up in another. I'm going to talk about that complication
 in the rest of this talk.
 
 
-Let's take a more theoretical look at things that you can do with 
+3.2
+
+Let's take a slightly more theoretical look at things that you can do with 
 a pointer or a reference (or a handle...) and how that might go
 wrong: - actually, these are things you can do to any value in a
-language, but the problems happen when those values are references.
+language, but the problems happen when those values are reference to
+some other reasource.
 
-We can forget a reference:
+
+3.2.1 Forgetting
+
+We can forget a reference - we might just stop mentioning it,
+or we might only talk about part of a structure such as a tuple.
 
 SLIDE: todo in rust
 or TODO in haskell
@@ -151,8 +251,11 @@ We had a pointer to r. But we've abandoned it without releasing
 the memory. In a garbage collected system, that means the
 garbage collector can come along later to release it.
 
+3.2.2 ...
+
 In a non-garbage collected system, often that's OK too,
-because we can also duplicate references:
+because we can also duplicate references and free the reference
+through that duplication.
 
 SLIDE:
 f(r) = 7
@@ -313,6 +416,8 @@ NOTES:
     state actions are compoletely serialised even when operating on
     "different" pieces of state (you can name them differently as STRef
     but actions are still explicitly serialised). pretty lame.
+    we have (ST s) with an uninstantiated s, to stop us passing
+    out a reference to code in a different sequence, or to pure code.
   - something to do with if we want a thing to do linear operations
      on, we can't let it be a pure "value" any more - for example,
      mutable in place array operations? (I think there's an array
@@ -348,4 +453,38 @@ really care about counting references at compile time:
 
 rust notion of lifetimes and ownership - these can be awkward to reason about. compile time type variables...
 
+
+copy trait: can mark that it is meanigful to just copy the bits to
+ duplicate a value.
+ - for example a double-length integer would make sense, but a
+   file handle not so.
+ - so this is not really about the "size" of the data, but of who
+   is managing any other resources that are references by the
+   bitwise value.
+  
+clone trait: let's the type handle how to duplicate itself, and is
+ invoked as an explicit operation.
+ 
+
 </pre>
+</section>
+                        </div>
+                </div>
+                <script src="head.js"></script>
+                <script src="reveal.js/js/reveal.js"></script>
+                <script>
+                        Reveal.initialize({
+  transition: "none",
+  slideNumber: "c/t",
+  dependencies: [
+{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+                { src: 'reveal.js/plugin/notes/notes.js', async: true },
+                { src: 'reveal.js/plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+
+                ]
+                        });
+                </script>
+        </body>
+</html>
+
+
