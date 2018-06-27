@@ -36,6 +36,7 @@ Haskell.
 <li> concurrency
 <li> pattern matching
 <li> single-assignment variables
+<li> nice macros
 </ul>
 
 <aside class="notes">
@@ -285,6 +286,9 @@ member, a file handle).
 First, we're allowed to forget references. We might just stop
 talking about a variable; or we might only pattern match 
 part of a tuple.
+
+When we do this, we hope that someone else (either another part
+of our code, or a garbage collector) will release the resources.
 </aside>
 
 </section>
@@ -310,17 +314,169 @@ That's usually combined with being able to duplicate references. We've
 passed a reference into <code>mutate</code> or <code>putStrLn</code>
 and those have done some stuff and then forgetten the reference,
 but that's fine, because we've also kept a copy for ourselves to
-pass in later.
+use to free/close later.
 
 Those two everyday operations - forgetting and duplicating - are part
-of what makes it quite hard to reason about whats going on, and
-controlling those is part of rust's resource management story.
+of what makes it quite hard to reason about whats going on.
+
+Controlling these inherently dangerous operations
+is a big part of Rust's resource management story.
 </aside>
 
 </section>
 
+
 <section>
 <pre>
+Every value in rust is owned by exactly one variable. When that
+variable goes out of scope, that value is freed.
+
+To begin with, that looks like the scope based model I talked about
+previously.
+
+[slide]
+fn main()
+{
+  let r = vec![1, 2, 3];
+  process(&r);
+}
+
+Rust puts in a static implicit free when r goes out of scope.
+To be clear - it isn't garbage collected.
+
+It's basically doing this, which is more explicit and also valid rust.
+
+[slide]
+fn main()
+{ 
+  let r = vec![1, 2, 3];
+  process(&r);
+  drop(r);
+}
+
+OK, so here's some buggy code. It's got a use-after-free bug that
+I hope is obvious - we've release r and then attempted to use it.
+
+Rust rejects this! There error says on line 6 we tried to use a value,
+but something had happened at line 5.
+
+It looks like it is detecting that r has been released, and giving
+an error - but that error talks about "moving" which is a more
+general concept.
+
+What has happened here is that I've transferred ownership of that
+vector - instead of being owned by <code>r</code> in this current
+scope, it has been handed over to be owned by drop, and so we can't
+also have it owned by r any more. So we have this novelty that
+variables can disappear effectively
+out of scope by using them in certain ways.
+
+Then it turns out that the implementation of drop just releases
+all the resources and can safely forget about te value.
+
+[slide]
+fn main()
+{
+  let r = vec![1, 2, 3];
+  process(&r);
+  drop(r);
+  process(&r);
+}
+
+5 |   drop(r);
+  |        - value moved here
+6 |   process(&r);
+  |            ^ value used here after move
+
+
+===
+
+So why does that happen for drop and not for process? Because we're
+passing in a reference to that value, rather than passing the
+value itself.
+
+References have slightly different rules applied to them, but there
+is still novel checking going on.
+
+Here's more code, with two function calls - it'll output the
+vector size twice.
+
+[slide]
+fn main()
+{
+  let r = vec![1, 2, 3];
+  process(&r);
+  process(&r);
+}
+
+fn process(s : &Vec<i32>) {
+  println!("vector size: {}", (*s).len());
+}
+
+$ ./a 
+vector size: 3
+vector size: 3
+
+===
+
+What happens if I try to release the vector inside the process
+function - trying to introduce a different use-after-free
+bug.
+
+As we might hope, we get a compiler error - "cannot move out of
+borrowed context". What does that mean? When we call drop, we
+transfer ownership of the value to drop. But, inside "process"
+we don't actually own s, so it isn't ours to give away.
+
+We've just "borrowed" it from the caller, and part of that calling
+contract is that at the end, we have to give it back.
+We can't release it;
+we can't transfer the ownership to someone else.
+
+We can allow another function call to borrow it from us, deeper
+and deeper: we know statically 
+that next level of function will give it back,
+because it's only borrowing, and so we know that at the end of
+process, we'll be able to give it back.
+
+[slide]
+fn main()
+{
+  let r = vec![1, 2, 3];
+  process(&r);
+  process(&r);
+}
+
+fn process(s : &Vec<i32>) {
+  println!("vector size: {}", s.len());
+  drop(*s)
+}
+
+error[E0507]: cannot move out of borrowed content
+  --> a.rs:10:8
+   |
+10 |   drop(*s)
+   |        ^^ cannot move out of borrowed content
+
+
+
+
+
+
+
+
+
+But wait...
+How does this work with function calls?
+[slide]
+the above
+with an implementation of function
+
+We can't have the value owned by two variables: r in the outer, and
+s in the inner function - we don't want to release s at the end of
+the inner function.
+
+
 
 ====
 
@@ -352,46 +508,7 @@ place, it pops up in another. I'm going to talk about that complication
 in the rest of this talk.
 
 
-3.2.1 Forgetting
-
-We can forget a reference - we might just stop mentioning it,
-or we might only talk about part of a structure such as a tuple.
-
-SLIDE: todo in rust
-or TODO in haskell
-f r = 7
-
-f (r,s) = r -- forget s
-f (r,_) = r
-
-We had a pointer to r. But we've abandoned it without releasing
-the memory. In a garbage collected system, that means the
-garbage collector can come along later to release it.
-
-3.2.2 ...
-
-In a non-garbage collected system, often that's OK too,
-because we can also duplicate references and free the reference
-through that duplication.
-
-SLIDE:
-f(r) = 7
-
-r = alloc()
-f(r)
-free(r)
-
-We passed r into f, but we also kept a copy ourselves and used it
-to free memory.
-
-A non-reference version of this might be
-
-SLIDE: (on end of previous slide?)
-sqr(x) = x * x
-
-where we duplicate the number stored in x - that's usually fine to do
-in this case.
-
+--
 What if we regard those operations (forgetting, and duplication)
 as inherently dangerous, and try to get rid of them?
 
