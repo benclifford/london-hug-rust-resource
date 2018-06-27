@@ -15,7 +15,7 @@
 <p>Press 's' for speaker notes</p>
 
 <aside class="notes">
-Rust can provide memory safety by statically tracking who owns
+0. Rust can provide memory safety by statically tracking who owns
 each piece of allocated memory.  This needs more elaborate type
 signatures, and plenty of wrestling to make it all compile -
 something any Haskeller will be familiar with.  I'll talk a bit
@@ -39,7 +39,7 @@ Haskell.
 </ul>
 
 <aside class="notes">
-I'm going to talk about resource management in a language called
+1. I'm going to talk about resource management in a language called
 Rust, which I expect a lot of people have heard about, even if
 they haven't used it.
 
@@ -89,7 +89,7 @@ by resource I'm using memory as my main example, but there are
 other examples such as open files; by "management", i mean
 keeping track of how that resource is allocated, used and released.
 
-There's an explicit, C-like, style.
+2.1 There's an explicit, C-like, style.
 
 (see slide)
 We allocate some memory (for example, with malloc). We use it
@@ -176,50 +176,48 @@ that memory remains allocated "forever" (for some notion of forever)
 
 <section>
 
+<pre><code class="haskell" data-trim data-noescape>
+let r = FooConstructor
+    in process r
+</code></pre>
+
 <aside class="notes">
+2.2 Another style of resource management is to use garbage collection.
+
+This has been round since the 1950s, though I first really used this in
+Java. It's pretty much the standard approach for memory
+management in high level
+languages - for example, it is how Haskell does things - but not other
+stuff like file handle management.
+
+So how does this work?
+We allocate some memory. We use it. We just stop talking about it
+and it goes away. Eventually.
+
+An advantage here is that if 'r' is in scope,
+we know the memory will not have been released.
+
+We can't name a thing, unless that thing is valid: knowing the "name"
+of the thing keeps it valid.
+
+A disadvantage is that garbage collectors run at runtime - this adds on
+a bunch of runtime overhead. Namecheck pusher/will for their
+especially degenerate garbage collection situation they encountered.
+
+Another disadvantage is that sometimes we do want to be a
+bit more explicit about when 
+a resource is released - we want to know a file has been closed,
+perhaps - but with garbage collection, you have to "hope" that you
+really have got rid of all references and that the collector runs
+"in time".
+
+By "hope" I mean manually prove outside of the type system.
 </aside>
 
 </section>
 
 <section>
 <pre>
-
-Another style to use garbage collection. I first really used this in
-Java, and it's pretty much the standard approach for memory
-management in high level
-languages - for example, it is how Haskell does things.
-
-Slide - example:
-
-let r = Foo
-in process r
-
-We can allocate some memory, we can use it, and then when we're done
-we just stop talking about it, and let the garbage collector eventually
-tidy things up.
-
-(As a side note, these languages are often a bit stricter
-about the types of references being passed around, but that is somewhat
-(but not entirely) orthogonal to memory management.)
-
-An advantage here: if 'r' is in scope, we know the memory will not have
-been released.
-
-We can't name a thing, unless that thing is valid: knowing the "name"
-of the thing keeps it valid.
-
-A disadvantage is that garbage collectors run at runtime - this adds on
-a bunch of runtime overhead.
-
-Also, sometimes we do want to be a bit more explicit about when 
-a resource is released - we want to know a file has been closed,
-perhaps - but with garbage collection, you have to "hope" that you
-really have got rid of all references. (by "hope" again I mean
-manually prove outside of the type system)
-
-[namecheck pusher / will's talk on very degenerate situation they
-encountered]
-
 --
 
 TODO: a third way:
