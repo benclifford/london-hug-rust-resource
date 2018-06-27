@@ -673,229 +673,28 @@ fn main()
 }
 
 
+===
+And very finally, what does Haskell offer in this space?
 
-====
+There's a linear types proposal, including an implementation that
+I've run on my laptop to check it was real.
 
-3.  So what does Rust do?
+This isn't aimed at exactly the same target as rust, and has a
+very different feel, 
+but it has a
+lot of similarities in so much as it cares
+about how and how many times you reference a value,
+so that more interesting behaviour can be built on that knowledge.
 
-3.1 Well, none of those.
+There's a paper you can read. Some of the things they claim to do
+are on this slide and are quite different to rust.
 
-it lets us write code like this:
+[slide]
+<li>accessing serialised data without copying it
+<li>sockets with type level state
+<li>pure bindings to impure APIs
 
-SLIDE: TODO: use rust syntax
-r = new Foo() 
-mutate(r)
-// drop(r)
-
-like the garbage collector or local variable case;
-
-... r can be a complex structure
-
-... but with memory release somehow managed
-statically - at compile time (like the local variable case)
-
-... but we can pass a pointer to that memory around outside of 
-the local scope (like the garbage collected case).
-
-Rust puts in release calls (called Drop) at the right place.
-
-This isn't magic though, and if we squish down complication in one
-place, it pops up in another. I'm going to talk about that complication
-in the rest of this talk.
-
-
---
-What if we regard those operations (forgetting, and duplication)
-as inherently dangerous, and try to get rid of them?
-
-The only way we can get rid of a pointer is by passing it into free()
-
-SLIDE:
-r = alloc()
-free(r)
-
-What about if we want to use that memory in a function?
-
-Slide:
-r = alloc()
-mutate(r)
-free(r)
-
-This doesn't work for two reasons:
-
-firstly, mutate() isn't allowed to forget r; and secondly, we can't
-pass r to mutate *and* keep a copy for later use.
-
-So mutate() could free r itself, but that's a bit limiting. Another
-thing it could do is pass it back:
-
-r = alloc()
-r' = mutate(r)
-free(r')
-
-mutate(r) = 
-   ...
-   return r
-
-
-We end up with explicit threading of the reference through the code.
-
-Then, we can use syntax to hide that, and
-get back this: (todo: rust & syntax for passing references - borrowing)
-
-r = alloc()
-mutate(r)
-free(r)
-
-which looks the same syntactically as our earlier example but now has
-linear semantics. We can say that mutate has "borrowed" the value
-and given it back afterwards.
-
-Another bit of syntax we can do: instead of needing to expliclty
-free r, we can insert a free call implicitly, when r goes out of
-scope.
-
-r = alloc()
-mutate(r)
-
-Syntactically this looks like the garbage collected case -
-but it isn't: we have those linear semantics that means we know r is still
-allocated at the end of this code block and that it's going to
-go out of scope at the end of this code block and that it has not
-been duplicated anywhere; so we can and must release it at the
-end of the block. releasing it like a stack automatic, even though
-there might be a lot more than just a couple of bytes on the stack.
-
-NOTES:
-
-0. about rust (1 min)
-
-1. Rust details (11 mins)
-
-    - motivation: basic motivation: freeing memory.
-         C - explicit frees. reasoning in programmers head.
-
-           - code sample. code sample with double free, or free then re-use. or we might forget to free it at all. memory leak in the sense of "the allocator knows it is allocated, but nobody else does"
-
-         many more recent languages (Java/Python/Haskell/Python...) - garbage collection. expensive. "naive" - as a programmer I know that some data won't be freed "now", but GC still has to make a *runtime* check of all that. Lots of GC tech over the years. It's "impossible" to have a pointer to memory that isn't allocated (and we usually call these references now, not pointers)
-
-           - code sample: allocate. long process, but keep variable assigned. so doesn't get freed. every gc in long process needs to consider this allocation. memory leak in the sense of "we don't need it, but the GC won't release it because we have a variable pointing at it".
-
-       - what if we could have the efficiency of static checking, with
-         the safety of GC?
-       - rust attempts to give some of this, though of course as you whack the mole down in one place, it pops up somewhere else, as we'll see...
-
-  ownership
-
-  lack of explicit frees - the frees go where the owner drops
-   the value
-
-  borrowing so you don't have to pass things back
-    - fighting the borrow checker. aka fighting the type checker.
-
-  type signatures - and how they are reminiscent of crazy haskell
-    type signatures  (eg lens, eff, servant)
-
-  analogies to compile-time/static garbage collection
-
-  various wrappers for ownership fun (reference counting - with
-    standard rc problems)
-
-  passing between threads?
-   - somewhat overblown chapter title "Fearless Concurrency" - specifically relevance to memory safety
-   - closures - passing ownership into a closure. 'move' keyword (not just for thread stuff... but useful when launching a thread). 'Copy' trait - for things that look like "values" - got rid of duplication but this is how we allow it. talking about "ownership" that is not just hierarchical scopes. channels - sending down a channel changes ownership - no longer in local scope, so we don't (and can't) use a thing or free it. message passing - but without copying.
-
-(concurrent) rust exmaples that are neat:
-
-  example of interesting ownership transfer:
-  1. todo: a simple transfer of ownership (into a function? or a struct?)
-
-  2. channel concurrency - sending memory to someone else is, like a free,
-    a way of safely getting rid of our responsibility for a resource,
-    and also means we can't access it any more.
-
-  mutux-on-memory (in shared memory concurrency section) - uses a smart pointer
-   the is aquired by unlocking, and when you drop the smart pointer,
-   it re-locks the mutex. mention that you would use unsafe to do this,
-   which, like in haskell, declares that you believe it to be safe
-   but the compiler can't check so. 'Drop' trait. Combines a value
-   which proves that we have access to the locked meory with the
-   actual reference to the memory, into a single smart pointer.
-   We can only ever have one of these smart pointers in existence at
-   once (if mutex is correctly implemented)
-
- - introduce "smart pointers" before that? as a pointer that can 
-    know how its going to be used - mutex as a particular instance
-    of that - or perhaps just mutex as *the* example to introduce
-    this?
-   - because we're more restricted on what we can do with pointers
-     /references, we can have (need?) more rust libraries that express
-      reference/pointer patterns in rust code,
-     that previously existed in our head or in the garbage collector.
-    - reference counting smart pointers, mutex above.
-      - eg 1. reference counting smart pointer: the pointer owns
-         the memory, and keeps track of how many people have a copy,
-         (because it has code both to create and drop references),
-         and can release memory on 0 references.
-      - more interestingly, mutex, for concurrency.
-
-
-2. what does haskell offer? (7 mins)
-- and can point out arnaud in the pub afterwards
- 2.1 state monads: (2 min)
-    state actions are compoletely serialised even when operating on
-    "different" pieces of state (you can name them differently as STRef
-    but actions are still explicitly serialised). pretty lame.
-    we have (ST s) with an uninstantiated s, to stop us passing
-    out a reference to code in a different sequence, or to pure code.
-  - something to do with if we want a thing to do linear operations
-     on, we can't let it be a pure "value" any more - for example,
-     mutable in place array operations? (I think there's an array
-     for that - MArray) - linearisation of all array operations by
-     monad sequence. - code examples of MArray? - there's an example
-     in s2.2 of the linear types paper, even.
- 2.2 linear types - tweag proposal (5 min)
-    very brief overview
-    - similar direction but different: can do more, and less.
-      eg rust has sugar - for borrowing (pass a value in and
-      get it back, and it is in a particular state inside the
-      borrowed call), and for implicitly releasing a value.
-    - maybe overview of interesting haskell-specific issues based
-        on section titles in paper - eg "consuming" a value in a lazy
-          language; using higher order functions; ... and some of the case studies. perhaps just put those on a slide and mention them in hardly any depth?
-
-====
-aspiwack [17:42]
-Full instructions here: https://github.com/tweag/ghc/tree/linear-types#readme
-
-benc [17:42]
-just so i can say in the talk "i have compiled something fairly simple with it" rather than "i have heard about this thing"
-aspiwack [17:42]
-A library with a fully configured stack.yaml: https://github.com/tweag/linear-base/
-====
-
-3. overview slide (1 min)
-
-
-really care about counting references at compile time:
- given a reference R, do we: drop it, duplicate it, neither (in which case, I think, it is linear?)
-
-
-rust notion of lifetimes and ownership - these can be awkward to reason about. compile time type variables...
-
-
-copy trait: can mark that it is meanigful to just copy the bits to
- duplicate a value.
- - for example a double-length integer would make sense, but a
-   file handle not so.
- - so this is not really about the "size" of the data, but of who
-   is managing any other resources that are references by the
-   bitwise value.
-  
-clone trait: let's the type handle how to duplicate itself, and is
- invoked as an explicit operation.
  
-
 </pre>
 </section>
                         </div>
