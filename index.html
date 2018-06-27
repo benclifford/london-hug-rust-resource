@@ -533,6 +533,85 @@ integer is: 10
 
 ====
 
+Now let's talk about reference lifetimes a bit. here's some code
+that given two vectors, returns the longest of the two. I'm passing
+in two references, that are each
+borrowed from somewhere, and returning one of those references based
+on a length test.
+
+This doesn't compile. We've been given two references to vectors,
+and we know
+those references are valid inside the function because we've borrowed
+those values - so we can do things like look at the lengths.
+
+But if we return a reference from a function, how do we know how
+long that reference is for? What if I want to return a reference
+to a value that goes out of scope at the end of the calling function?
+
+In this code, the l reference is going to be valid as long
+as r and q are both alive; but if either of them has been dropped,
+then potentially there's a problem and we can't be allowed to
+use that reference any more.
+
+[slide]
+fn main()
+{
+  let r = vec![1, 2, 3];
+  let q = vec![1, 2, 3, 4];
+  let l = longest(&q, &r);
+  process(l);
+}
+
+fn longest(s : &Vec<i32>, t : &Vec<i32>) -> &Vec<i32> {
+  if (*s).len() > (*t).len() {
+    return s;
+  } else {
+    return t;
+  }
+}
+
+error[E0106]: missing lifetime specifier
+ --> c.rs:9:45
+  |
+9 | fn longest(s : &Vec<i32>, t : &Vec<i32>) -> &Vec<i32> {
+  |                                             ^ expected lifetime parameter
+  |
+  = help: this function's return type contains a borrowed value, but the signature does not say whether it is borrowed from `s` or `t`
+
+====
+
+we can get round this by using lifetime annotations, like this. These
+are compile time variables that refer to reference lifetimes.
+What we've said is that longest wants to be given some lifetime
+a (at compile time), such that 
+s and t are references that both valid for at least that long;
+and the reference that comes back will also be valid for at least
+that long.
+
+In this example, in main, we call longest with an implicit compile
+time parameter that refers basically to the scope of main: r and q
+are valid in that scope, and so the return value l is valid in that
+scope too.
+
+If we called longest somewhere else, there might be a different
+implicit scope for that invocation.
+
+[slide]
+fn main()
+{
+  let r = vec![1, 2, 3];
+  let q = vec![1, 2, 3, 4];
+  let l = longest(&q, &r);
+  process(&l);
+}
+
+fn longest <'a> (s : &'a Vec<i32>, t : &'a Vec<i32>) -> &'a Vec<i32> {
+  if (*s).len() > (*t).len() {
+    return s;
+  } else {
+    return t;
+  }
+}
 
 
 ====
