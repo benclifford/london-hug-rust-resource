@@ -613,6 +613,66 @@ fn longest <'a> (s : &'a Vec<i32>, t : &'a Vec<i32>) -> &'a Vec<i32> {
   }
 }
 
+===
+
+So finally, I'd like to talk about smart pointers. These are pointers
+or references that know when they are dropped, so they can do some
+of your own processing - a bit like a finaliser in garbage collection,
+but safer and more useful.
+
+A basic example of this is the rust reference counted smart pointer.
+This allows data to be owned simultanously by multiple variables,
+and keeps a value allocated as long as any one of those owners still
+exists; it moves away from compile time reference checking, and
+goes back to something a bit more like garbage collected runtime
+checking.
+
+We can make a vector value and make a reference counted smart pointer
+to it - then we can clone it - and use r and q as if we owned the
+value. We can drop one, but the other stays alive. The final drop
+is what will actually drop the vector.
+
+[slide]
+use std::rc::Rc;
+
+fn main()
+{
+  let r = Rc::new(vec![1, 2, 3]);
+  let q = r.clone();
+  process(&r);
+  process(&q);
+  drop(r);
+  process(&q);
+  drop(q);
+}
+
+fn process(s : &Vec<i32>) {
+  println!("vector size: {}", (*s).len());
+}
+====
+
+A more interesting example, I think, is a mutex,
+which gives a taste of some of rust's concurrency libraries.
+We can lock the value protected by the mutex and simultaneously
+acquire a smart pointer to that value - the lock remains until
+that smart pointer goes out of scope.
+
+[slide]
+use std::sync::Mutex;
+
+fn main()
+{ 
+  let r = Mutex::new(vec![1, 2, 3]);
+  { 
+    let r1 = &r.lock().unwrap();
+    process(r1);
+  }
+  { let r2 = &r.lock().unwrap();
+    process(r2);
+  }
+}
+
+
 
 ====
 
