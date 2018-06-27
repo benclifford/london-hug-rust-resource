@@ -13,17 +13,8 @@
 <p>London Haskell, June 2018</p>
 <p><a href="mailto:benc@hawaga.org.uk">benc@hawaga.org.uk</a></p>
 <p>Press 's' for speaker notes</p>
-      </section>
 
-
-<section>
-
-<pre>
-
-Ownership in the Type System
-
-Abstract:
-
+<aside class="notes">
 Rust can provide memory safety by statically tracking who owns
 each piece of allocated memory.  This needs more elaborate type
 signatures, and plenty of wrestling to make it all compile -
@@ -31,18 +22,30 @@ something any Haskeller will be familiar with.  I'll talk a bit
 about the theory, a bit about the concrete language features
 that make this more usable, and a bit about some vaguely related
 Haskell.  
+</aside>
 
-====
+      </section>
 
-1. INTRO
 
+<section>
+<h2>What is rust?</h2>
+<ul>
+<li> closures
+<li> traits / typeclasses
+<li> parameterised types
+<li> concurrency
+<li> pattern matching
+<li> single-assignment variables
+</ul>
+
+<aside class="notes">
 I'm going to talk about resource management in a language called
 Rust, which I expect a lot of people have heard about, even if
-they haven't seen it.
+they haven't used it.
 
-I'm going to mix up three languages in this
-talk: Haskell (because of course), C (because it has some good
-examples that are hard in Haskell), and of course Rust.
+I'm going to mix up three languages in the code examples:
+Haskell (because, of course), C (because it has different
+examples from Haskell), and of course Rust.
 
 Briefly, Rust is a "safe, concurrent, practical language". What I think
 is interesting is that they care about safety, but have a strong
@@ -55,45 +58,58 @@ parts of the Firefox web browser are written in Rust.
 It's got plenty of modern language features - here's a list - but
 this isn't a Rust intro talk so I'm not really going to talk about them
 except when needed.
+</aside>
+</section>
 
-[SLIDE]
- closures
- traits - which are like typeclasses,
- parameterised types,
- concurrency,
- pattern matching, 
- single-assignment variables,
-(any other buzzwords?)
-[/SLIDE}
+<section>
+<pre><code class="C" data-trim data-noescape>
+void f() {
+  r = malloc(10);
+  mutate(r);
+  free(r);
+}
+</code></pre>
 
-====
+<pre><code class="haskell" data-trim data-noescape>
+do
+  r <- hOpenFile "foo" WriteMode
+  hPutStrLn r "hello world"
+  hClose r 
 
+</code></pre>
+<pre><code class="haskell" data-trim data-noescape>
+withFile $ \h -> hPutStrLn h "hello world"
+</code></pre>
+
+<aside class="notes">
 2. resource management techniques - a review
 
 First I'll briefly review some resource management techniques -
 by resource I'm using memory as my main example, but there are
-other examples.
+other examples such as open files; by "management", i mean
+keeping track of how that resource is allocated, used and released.
 
-There's an explicit, C-like, style:
+There's an explicit, C-like, style.
 
-[SLIDE]
-f() {
-  r = malloc(10)
-  mutate(r)
-  free(r)
-}
-[/SLIDE]
-
+(see slide)
 We allocate some memory (for example, with malloc). We use it
 (I don't care how, for the purposes of this talk).
 We free it. Here I'm using r to mean a "reference" or a "pointer"
 without getting too technical about what one of those is.
 
-In this example, that happens all in a row in the source code, so it's
-quite easy to reason about; but in
-reality it is likely the pointer to the memory gets passed around
-and stored in different places, on its eventual journey to being
-released.
+Or we open a file, write to it, and close it - the reference there
+is the file handle.
+
+In these two examples, that happens all in a row in the source code,
+so it's quite easy to reason about.
+
+The third example has a helper
+function withFile which also helps with reasoning: the handle is valid
+only inside the supplied action block.
+
+In reality it is likely a reference gets passed around
+stored and used in several different places,
+on its eventual journey to being released.
 
 (As a side note, C is pretty liberal about what you can
 use that memory for - you can allocate a number of bytes without
@@ -103,32 +119,70 @@ for.)
 The correctness proof happens "in our head (or test suites etc)",
 not in the compiler.
 
+</aside>
+</section>
+
+<section>
+<h2>use-after-free</h2>
+
+<pre><code class="C" data-trim data-noescape>
+void f() {
+  r = malloc(10);
+  free(r);
+  mutate(r);
+}
+</code></pre>
+
+<pre><code class="haskell" data-trim data-noescape>
+do
+  r <- hOpenFile "foo" WriteMode
+  hClose r 
+  hPutStrLn r "hello world"
+</code></pre>
+
+<aside class="notes">
 What might go wrong?
 
-We might free the memory before we have finished using it. Then what
-happens? Memory corruption or a segfault. [use-after-free]
+We might free the resource before we have finished using it. Then what
+happens? Memory corruption or a segfault or other failures.
+[use-after-free]
+</aside>
 
-[SLIDE}
-f() {
-  r = malloc(10)
-  free(r)
-  mutate(r)
+</section>
+
+<section>
+<h2>resource leak</h2>
+<pre><code class="C" data-trim data-noescape>
+void f() {
+  r = malloc(10);
+  mutate(r);
 }
-[SLIDE]
+</code></pre>
+
+<pre><code class="haskell" data-trim data-noescape>
+do
+  r <- hOpenFile "foo" WriteMode
+  hPutStrLn r "hello world"
+</code></pre>
+
+<aside class="notes">
 
 We might forget to free the memory, and then we have a memory leak:
 that memory remains allocated "forever" (for some notion of forever)
 
-f() {
-  r = malloc(10)
-  mutate(r)
-}
+</aside>
 
-and as a side note, we might allocate 4 bytes but run it on code that
-expects 8 bytes... similar memory corruption problems.
+</section>
 
+<section>
 
---
+<aside class="notes">
+</aside>
+
+</section>
+
+<section>
+<pre>
 
 Another style to use garbage collection. I first really used this in
 Java, and it's pretty much the standard approach for memory
