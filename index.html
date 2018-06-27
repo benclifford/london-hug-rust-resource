@@ -433,11 +433,12 @@ contract is that at the end, we have to give it back.
 We can't release it;
 we can't transfer the ownership to someone else.
 
-We can allow another function call to borrow it from us, deeper
+We can however allow another function call to borrow it from us, deeper
 and deeper: we know statically 
 that next level of function will give it back,
 because it's only borrowing, and so we know that at the end of
 process, we'll be able to give it back.
+
 
 [slide]
 fn main()
@@ -460,21 +461,77 @@ error[E0507]: cannot move out of borrowed content
 
 
 
+====
 
+To clarify that, here's a different implementation that
+fails. Instead of "process" borrowing the vector, it takes
+ownership of it (which includes responsibility for dropping it).
+So now the vector is allocated in main, but ownership is moved
+to process, and release at the end of process. We can see statically
+that it isn't available to be passed into the second call of process.
+If we wanted to, we could return it back as a return value though.
 
+A lot of rust developers talk about "fighting the borrow checker".
+This is basically making what I've just shown you work in real world
+situations. To me, it feels quite like when you have complex type
+signatures in haskell that you're trying to get to type check
+and you can sort of see how but it is still a battle.
 
-
-
-
-But wait...
-How does this work with function calls?
 [slide]
-the above
-with an implementation of function
+fn main()
+{
+  let r = vec![1, 2, 3];
+  process(r);
+  process(r);
+}
 
-We can't have the value owned by two variables: r in the outer, and
-s in the inner function - we don't want to release s at the end of
-the inner function.
+fn process(s : Vec<i32>) {
+  println!("vector size: {}", s.len());
+} // release happens here
+
+error[E0382]: use of moved value: `r`
+ --> a.rs:5:11
+  |
+4 |   process(r);
+  |           - value moved here
+5 |   process(r);
+  |           ^ value used here after move
+  |
+  = note: move occurs because `r` has type `std::vec::Vec<i32>`, which does not implement the `Copy` trait
+
+Now, look at this bit of the error message, where it says a move
+occurs because the vector type doesn't implement the copy trait.
+Traits are like haskell typeclasses, and the copy trait is a marker
+that says actually you can safely duplicate this value. If it's a
+simple type, such as a 32 bit integer, then the ownership rules
+can be more relaxed.
+
+===
+
+so here's the same code, but instead of using a vector, it uses
+a single integer. This compiles and run fine because i32 has
+the copy trait. So all this borrow checking and ownership
+stuff doesn't apply to "simple" values, thankfully. Just to more
+complicated values.
+
+
+[slide]
+fn main()
+{
+  let r = 10;
+  process(r);
+  process(r);
+}
+
+fn process(s : i32) {
+  println!("integer is: {}", s);
+}
+
+$ ./b 
+integer is: 10
+integer is: 10
+
+====
 
 
 
